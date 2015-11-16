@@ -1,0 +1,198 @@
+unsigned int W[6] = {0x7F00,0x0200,0x0400,0x0400,0x0200,0x7F00};
+unsigned int D[6] = {0x1C00,0x2200,0x4100,0x4100,0x7F00,0x7F00};
+unsigned int I[6] = {0x6300,0x6300,0x7F00,0x7F00,0x6300,0x6300};
+unsigned int C[6] = {0x2200,0x6300,0x6300,0x6300,0x7F00,0x3E00};
+unsigned int K[6] = {0x6300,0x3600,0x1C00,0x0800,0x7F00,0x7F00};
+unsigned int dash[6] = {0x3C00,0x0000,0x3C00,0xFF00,0x3C00,0x8100};
+
+unsigned long screen1[16] = {0xF0000000,
+                             0x0F000000,
+                             0x00F00000,
+                             0x000F0000,
+                             0x0000F000,
+                             0x00000F00,
+                             0x000000F0,
+                             0x0000000F,
+                             0x000000F0,
+                             0x00000F00,
+                             0x0000F000,
+                             0x000F0000,
+                             0x00F00000,
+                             0x0F000000,
+                             0xF0000000,
+                             0x000F0000};
+
+                             
+unsigned long mse_rocks[16] = {0x00000000,
+                               0x0117DF00,
+                               0x01B45000,
+                               0x01F41000,
+                               0x0157DF00,
+                               0x01105000,
+                               0x01145000,
+                               0x0117DF00,
+                               0x00000000,
+                               0x7DF7D17C,
+                               0x45145244,
+                               0x45141440,
+                               0x7D141C7C,
+                               0x51141204,
+                               0x49145144,
+                               0x45F7D17C};
+
+               
+
+int col_sh_cp = 10;
+int col_ds = 12;
+int col_st_cp = 11;
+int col_mr = 13;
+
+int row_sh_cp = 4;
+int row_ds = 3;
+int row_st_cp = 5;
+int row_mr = 6;
+
+int delay1 = 0;
+int delay2 = 0;
+int delay3micros = 0;
+
+int serial_clock_p_width_micros = 1;
+int latch_p_width = 0;
+
+int light_on_period = 1;
+
+
+void setup() {
+  // put your setup code here, to run once:
+
+pinMode(col_sh_cp, OUTPUT);
+pinMode(col_ds, OUTPUT);
+pinMode(col_st_cp, OUTPUT);
+pinMode(col_mr, OUTPUT);
+pinMode(row_sh_cp, OUTPUT);
+pinMode(row_ds, OUTPUT);
+pinMode(row_st_cp, OUTPUT);
+pinMode(row_mr, OUTPUT);
+
+digitalWrite(row_mr, HIGH);
+digitalWrite(col_mr, HIGH);
+digitalWrite(col_sh_cp, LOW);
+digitalWrite(col_st_cp, LOW);
+digitalWrite(row_sh_cp, LOW);
+digitalWrite(row_st_cp, LOW);
+delay(100);
+
+
+} //*************END OF SETUP ******************************
+
+
+void loop() 
+{
+   for (int i = -34; i<35;i++)
+   {
+      updateMatrix(mse_rocks, i);
+   }
+     
+} //**************END OF LOOP********************************
+
+void cycle_col_clock (int pulse_width)
+{
+  digitalWrite(col_sh_cp, HIGH); 
+  delayMicroseconds(pulse_width); 
+  digitalWrite(col_sh_cp, LOW); 
+  delayMicroseconds(pulse_width);
+}
+
+void cycle_row_clock (int pulse_width)
+{
+  digitalWrite(row_sh_cp, HIGH); 
+  delayMicroseconds(pulse_width); 
+  digitalWrite(row_sh_cp, LOW); 
+  delayMicroseconds(pulse_width);
+}
+
+void cycle_row_register (int pulse_width)
+{
+  digitalWrite(row_st_cp, HIGH); 
+  delay(pulse_width); 
+  digitalWrite(row_st_cp, LOW); 
+  delay(pulse_width);
+}
+
+void cycle_col_register (int pulse_width)
+{
+  digitalWrite(col_st_cp, HIGH); 
+  delay(pulse_width); 
+  digitalWrite(col_st_cp, LOW); 
+  delay(pulse_width);
+}
+
+void set_row (unsigned long row)
+{
+  unsigned long current_bit = 1;
+  for (int i = 0; i<32; i++)
+  {
+     if (row & current_bit)
+     {
+        digitalWrite(col_ds, HIGH);
+     }
+     else 
+     {
+        digitalWrite(col_ds, LOW);
+     }
+     cycle_col_clock (serial_clock_p_width_micros);
+
+     current_bit = (current_bit << 1);
+  }
+  cycle_col_register(latch_p_width);
+}
+
+void updateMatrix(unsigned long screen[], int shift)
+{ 
+  digitalWrite(row_ds, HIGH);
+  shift_row();                      //send one to activate the first row
+  digitalWrite(row_ds, LOW);
+
+  for(int row = 1; row < 16; row++)  //set first 15 rows, shifting row after each one
+  {
+    if(shift >= 0)
+    {
+      set_row(screen[row-1] << shift);
+    }
+    else
+    {
+      set_row(screen[row-1] >> (-1*shift));
+    }
+    delay(light_on_period);
+    shift_row();
+  }
+  
+  set_row(screen[15]); //Set the last row without shifing row after
+  delay(light_on_period);
+}
+
+void transfer_registers (void)
+{
+  
+    cycle_col_register(latch_p_width);
+    cycle_row_register(latch_p_width);
+}
+
+void shift_row(void)
+{
+  cycle_row_clock (serial_clock_p_width_micros);
+  cycle_row_register(latch_p_width);
+}
+
+void erase_displays (void)
+{
+   digitalWrite(row_mr, LOW);
+   digitalWrite(col_mr, LOW);
+   delay(0);
+   cycle_col_register(latch_p_width);
+   cycle_row_register(latch_p_width);
+   digitalWrite(row_mr, HIGH);
+   digitalWrite(col_mr, HIGH);
+   delay(0);
+}
+
